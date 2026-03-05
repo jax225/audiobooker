@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 text2speech.py - Озвучка книги по абзацам в MP3 файлы
-с сетевой устойчивостью и повторными попытками
+с сетевой устойчивостью и повторными попытками  с возможностью продолжения
 """
 
 import argparse
@@ -36,6 +36,7 @@ def parse_args():
   %(prog)s -i book.html                      # озвучка в динамик
   %(prog)s -i book.html -o D:/audio/          # запись в MP3 в папку
   %(prog)s -i book.html -t                    # тестовый прогон
+  %(prog)s -i book.html -o ./audio -f 728     # начать с 728 абзаца устанавливается значение последнего созданного mp3 файла
   %(prog)s -i book.html -o ./audio -s +30     # запись с ускорением
 
 При записи в MP3 (-o) воспроизведения нет, только сохранение файлов.
@@ -49,6 +50,11 @@ def parse_args():
 
     parser.add_argument('-o', '--output-dir',
                         help='Папка для сохранения MP3 (если указана, воспроизведения нет)')
+
+    parser.add_argument('-f', '--start-from',
+                        type=int,
+                        default=1,
+                        help='Начать с указанного номера абзаца (по умолчанию 1)')
 
     parser.add_argument('-t', '--test',
                         action='store_true',
@@ -65,7 +71,7 @@ def parse_args():
     return parser.parse_args()
 
 
-# ========================= ПРОВЕРКА ФАЙЛА =========================
+# ========================= ПРОВЕРКА ФАЙЛА ==========================
 def validate_file(filename):
     """Проверяет существование файла и наличие тегов <p>"""
     if not os.path.exists(filename):
@@ -181,10 +187,11 @@ async def save_paragraph_to_file(text, voice, speed, output_dir, index, total, r
     if filepath.exists():
         size = filepath.stat().st_size
         if size > 0:
-            print(f"⏩ [{index}/{total}] {filename} уже существует ({size / 1024:.1f} KB) - пропускаем")
+            print(f"⏩ [{index:06d}/{total:06d}] {filename} уже существует ({size / 1024:.1f} KB) - пропускаем")
             return True, filename, size
 
     # Генерируем с повторами
+    print(f"🎤 [{index:06d}/{total:06d}] Генерация...")
     success, audio_data = await generate_with_retry(text, voice, speed, index, total, retry_cycle)
 
     if not success:
@@ -194,6 +201,7 @@ async def save_paragraph_to_file(text, voice, speed, output_dir, index, total, r
     filepath.write_bytes(audio_data)
     size = filepath.stat().st_size
 
+    print(f"✅ [{index:06d}/{total:06d}] {filename} сохранен ({size / 1024:.1f} KB)")
     return True, filename, size
 
 
@@ -210,20 +218,38 @@ async def main():
 
     # Парсим абзацы
     print("Ищем теги <p>...")
-    paragraphs = extract_paragraphs(content)
+    all_paragraphs = extract_paragraphs(content)
 
-    if not paragraphs:
+    if not all_paragraphs:
         print("Не найдено ни одного непустого абзаца")
         sys.exit(1)
 
-    # Статистика
+    total_all = len(all_paragraphs)
+
+    # Проверяем start-from
+    start_idx = args.start_from - 1  # переводим в 0-индексацию
+    if start_idx < 0:
+        start_idx = 0
+    if start_idx >= total_all:
+        print(f"Ошибка: start-from {args.start_from} больше общего числа абзацев ({total_all})")
+        sys.exit(1)
+
+    # Берем только нужные абзацы (начиная с start_idx)
+    paragraphs = all_paragraphs[start_idx:]
     total = len(paragraphs)
+    first_num = start_idx + 1  # первый номер файла
+
+    # Статистика
     total_chars = sum(p['len'] for p in paragraphs)
-    avg_len = total_chars / total
+    avg_len = total_chars / total if total > 0 else 0
 
     print("\n" + "=" * 70)
     print("СТАТИСТИКА:")
-    print(f"  Всего абзацев: {total}")
+    print(f"  Всего абзацев в файле: {total_all}")
+    print(f"  Начинаем с номера: {first_num:06d}")
+    print(f"  Будет обработано: {total}")
+    print(f"  Первый файл: {first_num:06d}.mp3")
+    print(f"  Последний файл: {first_num + total - 1:06d}.mp3")
     print(f"  Всего символов: {total_chars:,}")
     print(f"  Средняя длина: {avg_len:.0f} символов")
     print(f"  Скорость речи: {args.speed}")
@@ -253,6 +279,7 @@ async def main():
 
     start_time = time.time()
     failed_paragraphs = []
+    processed_count = 0
 
     try:
         retry_cycle = 1
@@ -261,29 +288,27 @@ async def main():
             print(f"ЦИКЛ ПОВТОРА {retry_cycle}/{MAX_RETRIES}")
             print(f"{'=' * 50}")
 
-            for i, p in enumerate(paragraphs, 1):
-                # Пропускаем уже успешно обработанные
-                if save_mode and hasattr(p, 'processed') and p['processed']:
-                    continue
+            for idx, p in enumerate(paragraphs):
+                # Реальный номер файла (с учетом start-from)
+                file_num = first_num + idx
 
-                # Прогресс в консоль
-                chars = p['len']
-                progress = f"[{i}/{total}] {chars} символов"
+                # Пропускаем уже успешно обработанные в этом цикле
+                if hasattr(p, 'processed') and p['processed']:
+                    continue
 
                 # Сохраняем в файл
                 success, filename, size = await save_paragraph_to_file(
                     p['text'], args.voice, args.speed,
-                    output_path, i, total, retry_cycle
+                    output_path, file_num, total_all, retry_cycle
                 )
 
                 if success:
                     p['processed'] = True
-                    size_kb = size / 1024
-                    print(f"✅ {progress} -> {filename} ({size_kb:.1f} KB)")
+                    processed_count += 1
                 else:
-                    print(f"❌ {progress} -> ОШИБКА (абзац {i})")
+                    print(f"❌ [{file_num:06d}/{total_all:06d}] ОШИБКА (абзац {idx + 1} в текущей сессии)")
                     failed_paragraphs.append({
-                        'index': i,
+                        'number': file_num,
                         'text': p['text'][:100] + '...' if len(p['text']) > 100 else p['text'],
                         'retry_cycle': retry_cycle
                     })
@@ -296,7 +321,7 @@ async def main():
                     break
                 else:
                     if retry_cycle < MAX_RETRIES:
-                        print(f"\n⚠️  Обработано {processed}/{total} абзацев")
+                        print(f"\n⚠️  Обработано {processed}/{total} абзацев в этом запуске")
                         print(f"🔄 Переходим к циклу {retry_cycle + 1}...")
                         await asyncio.sleep(BASE_TIMEOUT)  # Пауза между циклами
                         retry_cycle += 1
@@ -314,16 +339,19 @@ async def main():
         if save_mode:
             processed = sum(1 for p in paragraphs if hasattr(p, 'processed') and p['processed'])
             print(f"\n📊 СТАТИСТИКА ПРЕРЫВАНИЯ:")
-            print(f"   Обработано успешно: {processed}/{total}")
-            print(f"   Не обработано: {total - processed}")
+            print(f"   Обработано успешно в этом запуске: {processed}/{total}")
+            print(f"   Первый номер: {first_num:06d}")
+            print(f"   Последний обработанный: {first_num + processed - 1:06d}")
             print(f"   Время работы: {elapsed:.1f} сек")
 
             if failed_paragraphs:
-                print(f"\n❌ ПРОБЛЕМНЫЕ АБЗАЦЫ:")
-                for fail in failed_paragraphs[-10:]:  # последние 10 ошибок
-                    print(f"   • Абзац {fail['index']}: {fail['text']}")
+                print(f"\n❌ ПРОБЛЕМНЫЕ АБЗАЦЫ (последние 10):")
+                for fail in failed_paragraphs[-10:]:
+                    print(f"   • {fail['number']:06d}: {fail['text']}")
+
+            print(f"\n💡 Чтобы продолжить, запустите с флагом -f {first_num + processed}")
         else:
-            print(f"Обработано {i - 1} из {total} абзацев за {elapsed:.1f} сек")
+            print(f"Обработано {processed_count} из {total} абзацев за {elapsed:.1f} сек")
 
         sys.exit(0)
 
@@ -336,8 +364,10 @@ async def main():
         print("ИТОГОВЫЙ ОТЧЕТ")
         print(f"{'=' * 70}")
         print(f"📊 Статистика:")
-        print(f"   Всего абзацев: {total}")
-        print(f"   Успешно: {processed}")
+        print(f"   Всего абзацев в файле: {total_all}")
+        print(f"   Начинали с номера: {first_num:06d}")
+        print(f"   Должно быть обработано: {total}")
+        print(f"   Успешно в этом запуске: {processed}")
         print(f"   С ошибками: {len(failed_paragraphs)}")
         print(f"   Время работы: {elapsed:.1f} сек")
 
@@ -345,14 +375,14 @@ async def main():
             total_size = sum(f.stat().st_size for f in output_path.glob("*.mp3"))
             total_mb = total_size / (1024 * 1024)
             print(f"\n💾 Файлы:")
-            print(f"   Всего файлов: {len(list(output_path.glob('*.mp3')))}")
+            print(f"   Всего файлов в папке: {len(list(output_path.glob('*.mp3')))}")
             print(f"   Общий размер: {total_mb:.1f} MB")
             print(f"   Папка: {output_path.absolute()}")
 
         if failed_paragraphs:
             print(f"\n❌ СПИСОК ПРОБЛЕМНЫХ АБЗАЦЕВ:")
             for fail in failed_paragraphs:
-                print(f"   • [{fail['index']}] (цикл {fail['retry_cycle']}): {fail['text']}")
+                print(f"   • {fail['number']:06d}: {fail['text']}")
 
             # Сохраняем список ошибок в файл
             error_log = output_path / "errors.txt"
@@ -360,12 +390,15 @@ async def main():
                 f.write("ПРОБЛЕМНЫЕ АБЗАЦЫ\n")
                 f.write("=" * 50 + "\n")
                 for fail in failed_paragraphs:
-                    f.write(f"Абзац {fail['index']} (цикл {fail['retry_cycle']}):\n")
+                    f.write(f"Абзац {fail['number']:06d} (цикл {fail['retry_cycle']}):\n")
                     f.write(f"{fail['text']}\n")
                     f.write("-" * 50 + "\n")
             print(f"\n📝 Подробный лог ошибок: {error_log}")
+
+            print(f"\n💡 Чтобы продолжить с проблемных мест, запустите:")
+            print(f"   python text2speech.py -i {args.input_file} -o {args.output_dir} -f {first_num + processed}")
     else:
-        print(f"\n✅ ГОТОВО! Озвучено {total} абзацев за {elapsed:.1f} сек")
+        print(f"\n✅ ГОТОВО! Озвучено {processed_count} абзацев за {elapsed:.1f} сек")
 
 
 # ========================= ЗАПУСК =========================

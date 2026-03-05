@@ -1,14 +1,19 @@
 # -*- coding: utf-8 -*-
+
 import os
 import re
 
-# Имя входного файла
-input_filename = "d:\\Users\\admin\\Downloads\\125\\new1123.txt"
-# Имя выходного файла (то же имя, но с расширением .html)
-output_filename = "d:\\Users\\admin\\Downloads\\125\\new11233_100.html"
+# ============= НАСТРАИВАЕМЫЕ КОНСТАНТЫ =============
+INPUT_FILE = "C:\\Python\\audiobooker\\job_txt\\new1123.txt"  # имя входного файла (обязательно)
+OUTPUT_FILE = ""  # если пусто, создается рядом с входным
+
+MIN_PARAGRAPH_SIZE = 700  # минимальный размер абзаца в символах
+SEARCH_RADIUS = 200  # на сколько символов искать конец предложения
 
 
-def split_into_paragraphs(text, min_size=100):
+# ===================================================
+
+def split_into_paragraphs(text, min_size=MIN_PARAGRAPH_SIZE, radius=SEARCH_RADIUS):
     """
     Разбивает текст на абзацы примерно по min_size символов,
     строго по концам предложений (. ! ? с последующим пробелом или концом строки)
@@ -26,8 +31,8 @@ def split_into_paragraphs(text, min_size=100):
 
         # Если это не последний абзац, ищем конец предложения
         if end < text_length:
-            # Ищем в радиусе +200 символов (чтобы не резать по слогам)
-            search_end = min(end + 200, text_length)
+            # Ищем в радиусе +radius символов
+            search_end = min(end + radius, text_length)
 
             # Ищем позицию КОНЦА ПРЕДЛОЖЕНИЯ (.!? после которых пробел или конец строки)
             best_pos = -1
@@ -61,19 +66,32 @@ def split_into_paragraphs(text, min_size=100):
 
 
 try:
+    # Проверяем, что входной файл указан
+    if not INPUT_FILE:
+        print("❌ Ошибка: INPUT_FILE не указан!")
+        exit()
+
     # Читаем текст из файла
-    with open(input_filename, 'r', encoding='utf-8') as file:
+    with open(INPUT_FILE, 'r', encoding='utf-8') as file:
         text = file.read()
 
     # Убираем лишние пробелы в начале и конце
     text = text.strip()
 
     if not text:
-        print("Файл пуст")
+        print("❌ Файл пуст")
         exit()
 
-    # Разбиваем на абзацы по ~100 символов
-    paragraphs = split_into_paragraphs(text, 100)
+    # Определяем имя выходного файла
+    output_file = OUTPUT_FILE
+    if not output_file:
+        # Берем имя входного файла без расширения и добавляем .html
+        base_name = os.path.splitext(INPUT_FILE)[0]
+        output_file = base_name + ".html"
+        print(f"ℹ️ OUTPUT_FILE не задан, будет создан: {output_file}")
+
+    # Разбиваем на абзацы
+    paragraphs = split_into_paragraphs(text, MIN_PARAGRAPH_SIZE, SEARCH_RADIUS)
 
     # Оборачиваем каждый абзац в тег <p>
     html_content = ""
@@ -84,18 +102,22 @@ try:
             html_content += f"<p>{para}</p>\n"
 
     # Записываем результат в HTML-файл
-    with open(output_filename, 'w', encoding='utf-8') as file:
+    with open(output_file, 'w', encoding='utf-8') as file:
         file.write(html_content)
 
     # Статистика
-    print(f"Файл успешно создан: {output_filename}")
-    print(f"Всего символов в исходном тексте: {len(text)}")
-    print(f"Получилось абзацев: {len(paragraphs)}")
+    print(f"✅ Файл успешно создан: {output_file}")
+    print(f"📊 Всего символов в исходном тексте: {len(text)}")
+    print(f"📊 Получилось абзацев: {len(paragraphs)}")
+    print(f"⚙️ Настройки: минимальный размер = {MIN_PARAGRAPH_SIZE}, радиус поиска = {SEARCH_RADIUS}")
 
-    # Показываем примеры, где были проблемы
-    print("\nПроверка спорных мест (должны быть целыми):")
+    # Показываем примеры первых 3 абзацев
+    print("\n🔍 Первые 3 абзаца:")
+    for i, para in enumerate(paragraphs[:3], 1):
+        print(f"  {i}. {len(para)} символов: {para[:100]}...")
 
-    # Ищем в тексте эти фрагменты и показываем, как они теперь выглядят
+    # Проверка проблемных мест из примера
+    print("\n🔍 Проверка целостности предложений:")
     check_phrases = [
         "Евгения Баранова, Александра Бурдакова, Егора Виноградова",
         "Илону и Сергея Спилберг, Елену Цыганову",
@@ -108,14 +130,14 @@ try:
         found = False
         for i, para in enumerate(paragraphs):
             if phrase in para:
-                print(f"✓ '{phrase[:30]}...' найден в абзаце {i + 1} (целиком)")
+                print(f"  ✓ '{phrase}' найден в абзаце {i + 1}")
                 found = True
                 break
         if not found:
-            print(f"✗ '{phrase[:30]}...' НЕ НАЙДЕН (проблема!)")
+            print(f"  ✗ '{phrase}' НЕ НАЙДЕН (проблема!)")
 
 except FileNotFoundError:
-    print(f"Ошибка: Файл {input_filename} не найден в текущей папке.")
-    print(f"Текущая папка: {os.getcwd()}")
+    print(f"❌ Ошибка: Файл {INPUT_FILE} не найден в текущей папке.")
+    print(f"📁 Текущая папка: {os.getcwd()}")
 except Exception as e:
-    print(f"Произошла ошибка: {e}")
+    print(f"❌ Произошла ошибка: {e}")
