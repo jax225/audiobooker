@@ -7,18 +7,20 @@
 .idea/
 .venv/
 .git/
-build/
-dist/
-job_txt/
 
+job_txt/
 
 # Project audiobooker
 
 audio
 audio_new
-
 *.mp3
 
 # Building
 
 *.spec
+build/
+dist/
+
+#Сache
+__pycache__/
