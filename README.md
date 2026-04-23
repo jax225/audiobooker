@@ -3,16 +3,19 @@
 Простое Windows-приложение для быстрого создания аудиокниг из текстовых файлов.
 
 **AudioBook Maker** выполняет два шага:
-1. Разбивает текст из `.txt` на абзацы по 700 и сохраняет в `.html` (с тегами `<p>`).
+
+*Файл с текстом должен быть обязательно в формате `.txt` c кодировкой `UTF-8`.*
+
+1. Разбивает текст из `.txt` на абзацы по 700+ символов до знака [.][!][?] и сохраняет в `.html` (с тегами `<p>`).
 2. Озвучивает получившийся HTML с помощью нейросетевых голосов Microsoft Edge (бесплатно) и сохраняет каждый абзац в отдельный MP3-файл.
 
 Приложение собрано в один исполняемый файл — не требует установки Python или дополнительных библиотек.
 
-[![GitHub release](https://img.shields.io/badge/version-1.0.0-blue)](https://github.com/yourusername/audiobookmaker/releases)
+[![GitHub release](https://img.shields.io/badge/version-1.0.0-blue)](https://github.com/jax225/audiobooker/releases/download/v1.0.0/AudioBookMaker.exe)
 
 ## 📥 Скачать
 
-Перейдите в [**Releases**](https://github.com/yourusername/audiobookmaker/releases) и скачайте последнюю версию `AudioBookMaker.exe`.
+Перейдите в [**Releases**](https://github.com/jax225/audiobooker/releases/) и скачайте последнюю версию `AudioBookMaker.exe`.
 
 Файл весит около **13 МБ**.
 
@@ -41,11 +44,12 @@
 ```
 C:\Users\User\Desktop
 │ AudioBookMaker.exe
+│ book.txt  ← подготовленный текст в кодировке UTF-8
 │ book.html ← результат шага 1
 │
 └───audio_mybook\ ← выбранная папка для MP3
-000001.mp3
-000002.mp3
-000003.mp3
+    ├── 000001.mp3
+    ├── 000002.mp3
+    └── 000003.mp3
 ...
 ```
