@@ -3,21 +3,17 @@
 # Get latest from https://github.com/github/gitignore/blob/main/Unity.gitignore
 
 #PyCharm 
-
 .idea/
 .venv/
 .git/
 
-job_txt/
-
 # Project audiobooker
-
+job_txt/
 audio
 audio_new
 *.mp3
 
 # Building
-
 *.spec
 build/
 dist/
