@@ -1,6 +1,38 @@
 # txt2html_module.py
 import os
+import re
 import sys
+
+
+def extract_chapter_title(text):
+    """
+    Ищет конструкцию 'Глава [номер]. название' в тексте чанка.
+    Возвращает строку вида 'Глава_2_Появление_в_деревне' или None.
+    Берёт не более 7 слов названия, пробелы заменяет на '_'.
+    Если в чанке несколько глав — берётся только первая (re.search
+    находит первое совпадение).
+    """
+    pattern = r'Глава\s+(\d+)\s*\.\s*(.+?)(?:\.|$)'
+    match = re.search(pattern, text)
+    if not match:
+        return None
+
+    number = match.group(1)
+    title_text = match.group(2).strip()
+
+    # Не более 7 слов
+    words = title_text.split()
+    if len(words) > 7:
+        words = words[:7]
+
+    # Пробелы → подчёркивания
+    title = '_'.join(words)
+
+    # Удаляем символы, недопустимые в именах файлов
+    title = re.sub(r'[\\/:*?"<>|]', '', title)
+
+    return f"Глава_{number}_{title}"
+
 
 def create_html_from_txt(txt_path, min_size=700, search_radius=200):
     """
@@ -14,7 +46,7 @@ def create_html_from_txt(txt_path, min_size=700, search_radius=200):
         if not text:
             return False, "", "Файл пуст", 0
 
-        # Разбивка на абзацы (твоя логика)
+        # Разбивка на абзацы
         def split_into_paragraphs(text, min_size, radius):
             if len(text) <= min_size:
                 return [text]
@@ -48,20 +80,22 @@ def create_html_from_txt(txt_path, min_size=700, search_radius=200):
 
         # Определяем папку запуска (работает и в .py, и в .exe)
         if getattr(sys, 'frozen', False):
-            # exe режим
             exe_dir = os.path.dirname(sys.executable)
         else:
-            # обычный Python
             exe_dir = os.path.dirname(os.path.abspath(__file__))
 
         base_name = os.path.splitext(os.path.basename(txt_path))[0]
         html_path = os.path.join(exe_dir, base_name + ".html")
 
-        # Собираем HTML
+        # Собираем HTML с определением глав
         html_content = ""
         for p in paragraphs:
             clean_p = ' '.join(p.split())
-            html_content += f"<p>{clean_p}</p>\n"
+            chapter = extract_chapter_title(clean_p)
+            if chapter:
+                html_content += f'<p data-chapter="{chapter}">{clean_p}</p>\n'
+            else:
+                html_content += f"<p>{clean_p}</p>\n"
 
         with open(html_path, 'w', encoding='utf-8') as f:
             f.write(html_content)
