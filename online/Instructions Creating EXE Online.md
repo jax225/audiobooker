@@ -1,4 +1,4 @@
-## 🔧 Как собрать EXE-файл
+## 🔧 Как собрать EXE-файл для online версии
 
 ### 1. Установите зависимости
 Убедитесь, что установлены `pyinstaller` и остальные библиотеки:
@@ -10,7 +10,7 @@ pip install pyinstaller edge-tts beautifulsoup4 aiohttp
 Откройте терминал в папке с проектом и вставьте:
 
 ```bash
-pyinstaller --onefile --windowed --name "AudioBookMaker" --hidden-import aiohttp --hidden-import edge_tts --hidden-import bs4 main_gui.py
+pyinstaller --onefile --windowed --name "AudioBookMaker_online" --hidden-import aiohttp --hidden-import edge_tts --hidden-import bs4 main_gui.py
 ```
 
 **Что значат флаги:**
@@ -24,4 +24,4 @@ pyinstaller --onefile --windowed --name "AudioBookMaker" --hidden-import aiohttp
 
 ---
 
-Всё, можете запускать `AudioBookMaker.exe` на любом Windows без Python.
+Всё, можете запускать `AudioBookMaker_online.exe` на любом Windows без Python.

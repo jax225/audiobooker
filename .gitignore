@@ -12,6 +12,7 @@ job_txt/
 audio
 audio_new
 *.mp3
+*.wav
 
 # Building
 *.spec
@@ -22,3 +23,7 @@ dist/
 __pycache__/
 *.pyc
 *.pyo
+
+#markup
+*.html
+*.txt
